@@ -1,0 +1,11 @@
+venv/
+qdrant_storage/
+data/
+.env
+__pycache__/
+*.pyc
+.next/
+node_modules/
+*.txt
+*.bin
+*.pkl
