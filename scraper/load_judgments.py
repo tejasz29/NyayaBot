@@ -9,69 +9,56 @@ for f in os.listdir(SAVE_DIR):
         os.remove(f"{SAVE_DIR}{f}")
 print("Cleared old data.")
 
+print("Loading full dataset (24k records)...")
+ds = load_dataset("viber1/indian-law-dataset", split="train")
+print(f"Total: {len(ds)}")
+
+# Topic buckets with keywords
+topics = {
+    "landlord_tenant": ["landlord", "tenant", "rent", "evict", "security deposit", "lease", "premises", "possession"],
+    "employment": ["employer", "employee", "terminat", "dismiss", "retrench", "salary", "wages", "labour", "workman", "notice period", "fired"],
+    "criminal": ["arrest", "bail", "fir", "police", "ipc", "accused", "crime", "offence", "custody", "warrant"],
+    "consumer": ["consumer", "refund", "defective", "product", "service", "complaint", "forum", "compensation"],
+    "property": ["property", "ownership", "transfer", "registration", "sale deed", "mutation", "land"],
+    "family": ["divorce", "marriage", "maintenance", "custody", "alimony", "matrimonial", "spouse"],
+    "contract": ["contract", "agreement", "breach", "damages", "enforce", "consideration"],
+    "cheque": ["cheque", "bounce", "dishonour", "negotiable", "138", "drawee"],
+    "accident": ["accident", "motor", "compensation", "negligence", "injury", "death claim"],
+    "fraud": ["fraud", "cheat", "misrepresent", "deceit", "forgery", "420"],
+}
+
+saved_per_topic = {}
+all_saved = []
+
+for topic, keywords in topics.items():
+    matches = []
+    for item in ds:
+        text = (item.get("Instruction", "") + " " + item.get("Response", "")).lower()
+        if any(k in text for k in keywords):
+            matches.append(item)
+        if len(matches) >= 150:  # 150 per topic
+            break
+    saved_per_topic[topic] = len(matches)
+    all_saved.extend(matches[:150])
+    print(f"  {topic}: {len(matches)} records")
+
+print(f"\nTotal collected: {len(all_saved)} records")
+
+# Save all
 saved = 0
-
-# Dataset 1 — Indian Law Q&A (topic-filtered)
-print("Loading Dataset 1: viber1/indian-law-dataset...")
-ds1 = load_dataset("viber1/indian-law-dataset", split="train")
-print(f"Total records: {len(ds1)}")
-
-# Keywords to filter relevant topics
-keywords = [
-    "landlord", "tenant", "rent", "evict", "deposit", "lease",
-    "employ", "terminat", "dismiss", "fired", "salary", "wages", "labour",
-    "arrest", "bail", "fir", "police", "criminal", "ipc",
-    "consumer", "refund", "defective", "complaint",
-    "property", "ownership", "transfer", "registr",
-    "divorce", "marriage", "maintenance", "custody",
-    "contract", "agreement", "breach", "damages",
-    "cheque", "bounce", "fraud", "cheat",
-    "accident", "compensation", "negligence"
-]
-
-filtered = []
-for item in ds1:
-    text = (item.get("Instruction", "") + item.get("Response", "")).lower()
-    if any(k in text for k in keywords):
-        filtered.append(item)
-
-print(f"Filtered records: {len(filtered)}")
-
-for item in filtered[:2000]:
+seen = set()
+for item in all_saved:
     try:
         question = item.get("Instruction", "").strip()
         answer   = item.get("Response", "").strip()
-        if len(answer) < 100:
+        if len(answer) < 100 or question in seen:
             continue
+        seen.add(question)
         text = f"Question: {question}\n\nAnswer: {answer}"
         with open(f"{SAVE_DIR}judgment_{saved}.txt", "w", encoding="utf-8") as f:
             f.write(f"SOURCE: https://huggingface.co/datasets/viber1/indian-law-dataset\nTITLE: {question[:100]}\n\n{text}")
         saved += 1
     except:
         continue
-print(f"Saved {saved} records from Dataset 1")
 
-
-# Dataset 2 — Lawyer GPT India (realistic case scenarios)
-print("\nLoading Dataset 2: nisaar/Lawyer_GPT_India...")
-ds2 = load_dataset("nisaar/Lawyer_GPT_India", split="train")
-print(f"Records: {len(ds2)}")
-
-start = saved
-for i, item in enumerate(ds2):
-    try:
-        question = item.get("question", "").strip()
-        answer   = item.get("answer", "").strip()
-        if len(answer) < 100:
-            continue
-        text = f"Question: {question}\n\nAnswer: {answer}"
-        with open(f"{SAVE_DIR}judgment_{saved}.txt", "w", encoding="utf-8") as f:
-            f.write(f"SOURCE: https://huggingface.co/datasets/nisaar/Lawyer_GPT_India\nTITLE: {question[:100]}\n\n{text}")
-        saved += 1
-        if saved - start >= 1000:
-            break
-    except:
-        continue
-print(f"Saved {saved - start} records from Dataset 2")
-
-print(f"\nTotal saved: {saved} records to data/")
+print(f"Saved {saved} topic-specific records to data/")

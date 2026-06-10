@@ -80,13 +80,45 @@ def hybrid_search(query, top_k=5):
 def root():
     return {"status": "NyayaBot API is running"}
 
+
 @app.post("/ask", response_model=AnswerResponse)
 def ask(body: QuestionRequest):
-    results = hybrid_search(body.question)
 
+    # Step 1 — Expand query into formal legal language
+    expansion_prompt = f"""Convert this question into formal Indian legal terminology for better search results.
+Return ONLY the expanded query, nothing else. Keep it under 30 words.
+
+Question: {body.question}
+Expanded legal query:"""
+
+    expansion = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": expansion_prompt}],
+        max_tokens=60
+    )
+    expanded_query = expansion.choices[0].message.content.strip()
+    print(f"Original: {body.question}")
+    print(f"Expanded: {expanded_query}")
+
+    # Step 2 — Search with both original and expanded query, merge results
+    results_original = hybrid_search(body.question, top_k=3)
+    results_expanded = hybrid_search(expanded_query, top_k=3)
+
+    # Merge and deduplicate
+    seen = set()
+    merged = []
+    for score, payload in results_original + results_expanded:
+        if payload["text"] not in seen:
+            seen.add(payload["text"])
+            merged.append((score, payload))
+
+    # Sort by score and take top 5
+    merged = sorted(merged, key=lambda x: x[0], reverse=True)[:5]
+
+    # Step 3 — Generate answer
     context = ""
     sources = []
-    for i, (score, payload) in enumerate(results):
+    for i, (score, payload) in enumerate(merged):
         context += f"[Case {i+1}] {payload.get('title', 'Unknown')}\n{payload['text']}\n\n"
         sources.append(Source(
             title=payload.get("title", "Unknown")[:80],
