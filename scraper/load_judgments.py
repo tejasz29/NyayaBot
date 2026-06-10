@@ -11,12 +11,33 @@ print("Cleared old data.")
 
 saved = 0
 
-# Dataset 1 — Indian Law Q&A (1000 records)
+# Dataset 1 — Indian Law Q&A (topic-filtered)
 print("Loading Dataset 1: viber1/indian-law-dataset...")
 ds1 = load_dataset("viber1/indian-law-dataset", split="train")
-print(f"Records: {len(ds1)}")
+print(f"Total records: {len(ds1)}")
 
-for i, item in enumerate(ds1):
+# Keywords to filter relevant topics
+keywords = [
+    "landlord", "tenant", "rent", "evict", "deposit", "lease",
+    "employ", "terminat", "dismiss", "fired", "salary", "wages", "labour",
+    "arrest", "bail", "fir", "police", "criminal", "ipc",
+    "consumer", "refund", "defective", "complaint",
+    "property", "ownership", "transfer", "registr",
+    "divorce", "marriage", "maintenance", "custody",
+    "contract", "agreement", "breach", "damages",
+    "cheque", "bounce", "fraud", "cheat",
+    "accident", "compensation", "negligence"
+]
+
+filtered = []
+for item in ds1:
+    text = (item.get("Instruction", "") + item.get("Response", "")).lower()
+    if any(k in text for k in keywords):
+        filtered.append(item)
+
+print(f"Filtered records: {len(filtered)}")
+
+for item in filtered[:2000]:
     try:
         question = item.get("Instruction", "").strip()
         answer   = item.get("Response", "").strip()
@@ -26,11 +47,10 @@ for i, item in enumerate(ds1):
         with open(f"{SAVE_DIR}judgment_{saved}.txt", "w", encoding="utf-8") as f:
             f.write(f"SOURCE: https://huggingface.co/datasets/viber1/indian-law-dataset\nTITLE: {question[:100]}\n\n{text}")
         saved += 1
-        if saved >= 1000:
-            break
     except:
         continue
 print(f"Saved {saved} records from Dataset 1")
+
 
 # Dataset 2 — Lawyer GPT India (realistic case scenarios)
 print("\nLoading Dataset 2: nisaar/Lawyer_GPT_India...")
